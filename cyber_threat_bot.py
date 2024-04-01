@@ -12,7 +12,7 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # API URL
-API_URL = "http://<your_machine_ip>:5000/cyberthreats"
+API_URL = "http://75.193.104.120:5000/cyberthreats"
 
 # Channel ID where updates will be posted
 CHANNEL_ID = 1224245050981089430  # Replace with your Discord channel ID
@@ -61,4 +61,4 @@ async def on_ready():
     print("Threat monitoring started...")
 
 # Run the bot
-bot.run("MTIyNDI0NTQzOTU1Mzg2NzgxNg.G2z3IB.WK0gFdxaRlk9QLUZkmleiaaMnj9BK8RFSU3I4Y")
+bot.run("MTIyNDI0NTQzOTU1Mzg2NzgxNg.GL1jKO.dgHeBGySTuNTVtoWwXVcaoU6KYHF5xZfAF2qpg")

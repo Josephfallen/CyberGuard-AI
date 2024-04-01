@@ -91,12 +91,12 @@ def get_cyber_threat(threat_id):
     else:
         return jsonify({"error": "Resource not found"}), 404
 
-# Endpoint to add a new cyber attack
+# Code to add a new cyber threat
 @app.route('/cyberthreats/add', methods=['POST'])
 def add_cyber_threat():
-    # Get JSON data from the request body
     data = request.json
-    
+    print(f"Received data: {data}")  # Debugging statement
+
     # Validate required fields
     if not data or 'type' not in data or 'severity' not in data or 'description' not in data:
         return jsonify({"error": "Missing required fields"}), 400
