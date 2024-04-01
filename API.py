@@ -1,118 +1,136 @@
-from flask import Flask, jsonify, request
-from flask_pymongo import PyMongo
+import feedparser
+import pymongo
+from datetime import datetime
+import time
 
-app = Flask(__name__)
+# RSS Feed URL
+RSS_FEED_URLS = [
+"https://feeds.feedburner.com/TheHackersNews?format=xml",
+"https://www.welivesecurity.com/en/rss/feed/"
+]
 
-# Configure MongoDB connection
-app.config["MONGO_URI"] = "mongodb://localhost:27017/cyber_threats"
-mongo = PyMongo(app)
+# MongoDB Connection
+MONGO_URI = "mongodb://localhost:27017/"
+DB_NAME = "cyber_threats"
+COLLECTION_NAME = "resources"
 
-# Function to fetch cyber threats by type
-def get_threats_by_type(threat_type):
-    # Connect to the 'resources' collection in MongoDB
-    collection = mongo.db.resources
-    
-    # Fetch documents with the specified threat type
-    threats = list(collection.find({'type': threat_type}))
-    
-    # Convert ObjectId to string for JSON serialization
-    for threat in threats:
-        threat['_id'] = str(threat['_id'])
-    
-    return threats
+# Expanded keywords and their corresponding types and severities
+KEYWORDS = {
+    "ransomware": ("Ransomware", "high"),
+    "phishing": ("Phishing", "medium"),
+    "malware": ("Malware", "high"),
+    "exploit": ("Exploit", "high"),
+    "vulnerability": ("Vulnerability", "medium"),
+    "data breach": ("Data Breach", "high"),
+    "cryptojacking": ("Cryptojacking", "medium"),
+    "botnet": ("Botnet", "high"),
+    "ddos": ("DDoS Attack", "high"),
+    "social engineering": ("Social Engineering", "medium"),
+    "zero-day": ("Zero-Day", "high"),
+    "trojan": ("Trojan", "high"),
+    "backdoor": ("Backdoor", "high"),
+    "keylogger": ("Keylogger", "medium"),
+    "rootkit": ("Rootkit", "high"),
+    "spyware": ("Spyware", "medium"),
+    "adware": ("Adware", "low"),
+    "pharming": ("Pharming", "medium"),
+    "man-in-the-middle": ("Man-in-the-Middle", "high"),
+    "whaling": ("Whaling", "medium"),
+    "watering hole": ("Watering Hole", "medium"),
+    "fileless malware": ("Fileless Malware", "high"),
+    "drive-by download": ("Drive-By Download", "medium"),
+    "credential stuffing": ("Credential Stuffing", "medium"),
+    "typosquatting": ("Typosquatting", "medium"),
+    "formjacking": ("Formjacking", "medium"),
+    "clickjacking": ("Clickjacking", "medium"),
+    "identity theft": ("Identity Theft", "high"),
+    "cyber espionage": ("Cyber Espionage", "high"),
+    "advanced persistent threat": ("Advanced Persistent Threat", "high"),
+    "iot": ("IoT Threat", "medium"),
+    "mobile malware": ("Mobile Malware", "medium"),
+    "supply chain attack": ("Supply Chain Attack", "high"),
+    "file encryption": ("File Encryption", "high"),
+    "sandbox evasion": ("Sandbox Evasion", "medium"),
+    "polymorphic malware": ("Polymorphic Malware", "high"),
+    "malvertising": ("Malvertising", "medium"),
+    "ransomware-as-a-service": ("Ransomware-as-a-Service", "high"),
+    "credential phishing": ("Credential Phishing", "medium"),
+    "smishing": ("Smishing", "medium"),
+    "vishing": ("Vishing", "medium"),
+    "malspam": ("Malspam", "medium"),
+    "zero-day vulnerability": ("Zero-Day Vulnerability", "high"),
+    "ransomware attack": ("Ransomware Attack", "high"),
+    "phishing attack": ("Phishing Attack", "medium"),
+    "data breach incident": ("Data Breach Incident", "high"),
+    "cyber attack": ("Cyber Attack", "high"),
+    "hijacking": ("Hyjacking", "low")
 
-# Endpoint to fetch cyber threats by type
-@app.route('/cyberthreats/type', methods=['GET'])
-def get_cyber_threats_by_type():
-    threat_type = request.args.get('type')
-    
-    if not threat_type:
-        return jsonify({"error": "Threat type parameter is missing"}), 400
-    
-    threats = get_threats_by_type(threat_type)
-    
-    return jsonify(threats), 200
+}
 
-# Function to fetch cyber threats by severity
-def get_threats_by_severity(severity):
-    # Connect to the 'resources' collection in MongoDB
-    collection = mongo.db.resources
-    
-    # Fetch documents with the specified severity
-    threats = list(collection.find({'severity': severity}))
-    
-    # Convert ObjectId to string for JSON serialization
-    for threat in threats:
-        threat['_id'] = str(threat['_id'])
-    
-    return threats
 
-# Endpoint to fetch cyber threats by severity
-@app.route('/cyberthreats/severity', methods=['GET'])
-def get_cyber_threats_by_severity():
-    severity = request.args.get('severity')
+# Function to fetch, search for keywords, assign severities, and format RSS feed data
+def fetch_and_format_feed(feed_url):
+    # Parse RSS feed
+    feed = feedparser.parse(feed_url)
     
-    if not severity:
-        return jsonify({"error": "Severity parameter is missing"}), 400
+    # List to store formatted cyber threats
+    formatted_threats = []
     
-    threats = get_threats_by_severity(severity)
+    # Loop through feed entries
+    for entry in feed.entries:
+        # Extract relevant data
+        title = entry.title.lower()  # Convert title to lowercase for keyword search
+        link = entry.link
+        description = entry.description
+        published = datetime.strptime(entry.published, "%a, %d %b %Y %H:%M:%S %z")
+        
+        # Search for keywords in title
+        threat_type = "News"  # Default type if no keyword is found
+        severity = "info"  # Default severity if no keyword is found
+        for keyword, (threat, sev) in KEYWORDS.items():
+            if keyword in title:
+                threat_type = threat
+                severity = sev
+                break
+        
+        # Format data for MongoDB
+        threat = {
+            "_id": link,  # Use link as the unique identifier to prevent duplicates
+            "type": threat_type,
+            "severity": severity,
+            "description": f"{title}\n{link}\n{description}",
+            "published": published
+        }
+        
+        formatted_threats.append(threat)
     
-    return jsonify(threats), 200
+    return formatted_threats
 
-# Endpoint to fetch all cyber threat resources
-@app.route('/cyberthreats', methods=['GET'])
-def get_cyber_threats():
-    # Connect to the 'resources' collection in MongoDB
-    collection = mongo.db.resources
+# Function to insert data into MongoDB
+def insert_into_mongodb(data):
+    # Connect to MongoDB
+    client = pymongo.MongoClient(MONGO_URI)
+    db = client[DB_NAME]
+    collection = db[COLLECTION_NAME]
     
-    # Fetch all documents from the collection
-    threats = list(collection.find({}))
+    # Insert data into collection with upsert=True to prevent duplicates
+    for threat in data:
+        collection.update_one({"_id": threat["_id"]}, {"$set": threat}, upsert=True)
     
-    # Convert ObjectId to string for JSON serialization
-    for threat in threats:
-        threat['_id'] = str(threat['_id'])
-    
-    return jsonify(threats), 200
+    print("Insertion completed.")
 
-# Endpoint to fetch a specific cyber threat resource by ID
-@app.route('/cyberthreats/<string:threat_id>', methods=['GET'])
-def get_cyber_threat(threat_id):
-    # Connect to the 'resources' collection in MongoDB
-    collection = mongo.db.resources
-    
-    # Fetch the document with the specified ID
-    threat = collection.find_one({'_id': threat_id})
-    
-    # Check if the document exists
-    if threat:
-        # Convert ObjectId to string for JSON serialization
-        threat['_id'] = str(threat['_id'])
-        return jsonify(threat), 200
-    else:
-        return jsonify({"error": "Resource not found"}), 404
+# Main function
+def main():
+    for feed_url in RSS_FEED_URLS:
+        formatted_threats = fetch_and_format_feed(feed_url)
+        
+        if formatted_threats:
+            insert_into_mongodb(formatted_threats)
+        else:
+            print(f"No cyber threats from {feed_url} to insert.")
+        
+        print(f"Processed {feed_url}.")
+        print("-" * 50)
 
-# Code to add a new cyber threat
-@app.route('/cyberthreats/add', methods=['POST'])
-def add_cyber_threat():
-    data = request.json
-    print(f"Received data: {data}")  # Debugging statement
-
-    # Validate required fields
-    if not data or 'type' not in data or 'severity' not in data or 'description' not in data:
-        return jsonify({"error": "Missing required fields"}), 400
-    
-    # Connect to the 'resources' collection in MongoDB
-    collection = mongo.db.resources
-    
-    # Insert new cyber attack data into MongoDB
-    result = collection.insert_one(data)
-    
-    # Check if insertion was successful
-    if result.inserted_id:
-        return jsonify({"message": "Cyber threat added successfully", "id": str(result.inserted_id)}), 201
-    else:
-        return jsonify({"error": "Failed to add cyber threat"}), 500
-
-if __name__ == '__main__':
-    # Run the Flask app on host '0.0.0.0' and port 5000
-    app.run(host='0.0.0.0', port=5000)
+if __name__ == "__main__":
+    main()
