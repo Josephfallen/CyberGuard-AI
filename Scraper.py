@@ -1,9 +1,13 @@
 import feedparser
 import pymongo
 from datetime import datetime
+import time
 
 # RSS Feed URL
-RSS_FEED_URL = "https://feeds.feedburner.com/TheHackersNews?format=xml"
+RSS_FEED_URLS = [
+"https://feeds.feedburner.com/TheHackersNews?format=xml",
+"https://www.welivesecurity.com/en/rss/feed/"
+]
 
 # MongoDB Connection
 MONGO_URI = "mongodb://localhost:27017/"
@@ -58,14 +62,16 @@ KEYWORDS = {
     "ransomware attack": ("Ransomware Attack", "high"),
     "phishing attack": ("Phishing Attack", "medium"),
     "data breach incident": ("Data Breach Incident", "high"),
-    "cyber attack": ("Cyber Attack", "high")
+    "cyber attack": ("Cyber Attack", "high"),
+    "hijacking": ("Hyjacking", "low")
 
 }
 
+
 # Function to fetch, search for keywords, assign severities, and format RSS feed data
-def fetch_and_format_feed():
+def fetch_and_format_feed(feed_url):
     # Parse RSS feed
-    feed = feedparser.parse(RSS_FEED_URL)
+    feed = feedparser.parse(feed_url)
     
     # List to store formatted cyber threats
     formatted_threats = []
@@ -89,6 +95,7 @@ def fetch_and_format_feed():
         
         # Format data for MongoDB
         threat = {
+            "_id": link,  # Use link as the unique identifier to prevent duplicates
             "type": threat_type,
             "severity": severity,
             "description": f"{title}\n{link}\n{description}",
@@ -106,23 +113,23 @@ def insert_into_mongodb(data):
     db = client[DB_NAME]
     collection = db[COLLECTION_NAME]
     
-    # Insert data into collection
-    result = collection.insert_many(data)
+    # Insert data into collection with upsert=True to prevent duplicates
+    for threat in data:
+        collection.update_one({"_id": threat["_id"]}, {"$set": threat}, upsert=True)
     
-    # Print inserted IDs
-    print(f"Inserted IDs: {result.inserted_ids}")
+    print("Insertion completed.")
 
 # Main function
 def main():
-    for _ in range(500):  # Loop 500 times
-        formatted_threats = fetch_and_format_feed()
+    for feed_url in RSS_FEED_URLS:
+        formatted_threats = fetch_and_format_feed(feed_url)
         
         if formatted_threats:
             insert_into_mongodb(formatted_threats)
         else:
-            print("No cyber threats to insert.")
+            print(f"No cyber threats from {feed_url} to insert.")
         
-        print(f"Iteration {_ + 1} completed.")
+        print(f"Processed {feed_url}.")
         print("-" * 50)
 
 if __name__ == "__main__":
