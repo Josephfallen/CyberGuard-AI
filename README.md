@@ -3,7 +3,8 @@
 # Cyber Threats API Documentation
 
 The Cyber Threats API provides endpoints to fetch, filter, and add cyber threat resources from a MongoDB database.
-
+> [!IMPORTANT]
+> At the current state, You will need to run the API yourself, We are undergoing server maintenance with no ETA, Your "Base URL" will change.
 ## Base URL
 
 ```
